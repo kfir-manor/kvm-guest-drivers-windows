@@ -75,6 +75,9 @@
 #define S_IFDIR     040000
 #define S_IFLNK     0120000
 
+#define DEFAULT_OVERFLOWUID 65534
+#define DEFAULT_OVERFLOWGID 65534
+
 #define DBG(format, ...) \
     FspDebugLog("*** %s: " format "\n", __FUNCTION__, __VA_ARGS__)
 
@@ -82,6 +85,9 @@
 
 #define ReadAndExecute(x) ((x) | (((x) & 0444) >> 2))
 #define GroupAsOwner(x) (((x) & ~0070) | (((x) & 0700) >> 3))
+
+static uint32_t OverflowUid;
+static uint32_t OverflowGid;
 
 typedef struct
 {
@@ -100,9 +106,6 @@ struct VIRTFS
     HANDLE  Device{ NULL };
 
     ULONG   DebugFlags{ 0 };
-
-    // Service start rountine waits for this event until the device is found.
-    HANDLE  EvtDeviceFound{ NULL };
 
     // Used to handle device arrive notification.
     DeviceInterfaceNotification DevInterfaceNotification{};
@@ -270,16 +273,8 @@ DWORD VIRTFS::DevInterfaceArrival()
         goto out_unreg_dh_notify;
     }
 
-    if (SetEvent(EvtDeviceFound) == FALSE)
-    {
-        Error = GetLastError();
-        goto out_stop_virtfs;
-    }
-
     return ERROR_SUCCESS;
 
-out_stop_virtfs:
-    Stop();
 out_unreg_dh_notify:
     DevHandleNotification.AsyncUnregister();
 out_close_handle:
@@ -1180,8 +1175,14 @@ static NTSTATUS GetSecurityByName(FSP_FILE_SYSTEM *FileSystem, PWSTR FileName,
 
         if (lstrcmp(FileName, TEXT("\\")) == 0)
         {
-            VirtFs->OwnerUid = attr->uid;
-            VirtFs->OwnerGid = attr->gid;
+            // If the shared directory UID or GID turns out to be 'nobody', it
+            // means the host daemon is inside the user namespace. So, the
+            // previous identity is 0 or another valid value. So, let's try to
+            // preserve it.
+            VirtFs->OwnerUid = (attr->uid != OverflowUid) ?
+                                attr->uid : VirtFs->OwnerUid;
+            VirtFs->OwnerGid = (attr->gid != OverflowGid) ?
+                                attr->gid : VirtFs->OwnerGid;
         }
 
         if (PFileAttributes != NULL)
@@ -2594,6 +2595,15 @@ static VOID ParseRegistry(ULONG& DebugFlags, std::wstring& DebugLogFile,
     RegistryGetVal(FS_SERVICE_REGKEY, L"MountPoint", MountPoint);
 }
 
+static VOID ParseRegistryCommon()
+{
+    OverflowUid = DEFAULT_OVERFLOWUID;
+    OverflowGid = DEFAULT_OVERFLOWGID;
+
+    RegistryGetVal(FS_SERVICE_REGKEY, L"OverflowUid", OverflowUid);
+    RegistryGetVal(FS_SERVICE_REGKEY, L"OverflowGid", OverflowGid);
+}
+
 static NTSTATUS DebugLogSet(const std::wstring& DebugLogFile)
 {
     HANDLE DebugLogHandle = INVALID_HANDLE_VALUE;
@@ -2642,6 +2652,8 @@ static NTSTATUS SvcStart(FSP_SERVICE* Service, ULONG argc, PWSTR* argv)
         ParseRegistry(DebugFlags, DebugLogFile, CaseInsensitive, MountPoint);
     }
 
+    ParseRegistryCommon();
+
     if (!NT_SUCCESS(Status))
     {
         return Status;
@@ -2673,36 +2685,19 @@ static NTSTATUS SvcStart(FSP_SERVICE* Service, ULONG argc, PWSTR* argv)
         goto out_free_virtfs;
     }
 
-    VirtFs->EvtDeviceFound = CreateEvent(NULL, FALSE, FALSE, NULL);
-    if (VirtFs->EvtDeviceFound == NULL)
-    {
-        Error = GetLastError();
-        Status = FspNtStatusFromWin32(Error);
-        goto out_free_virtfs;
-    }
-
     Error = VirtFs->DevInterfaceNotification.Register(DeviceNotificationCallback,
         VirtFs, GUID_DEVINTERFACE_VIRT_FS);
     if (Error != ERROR_SUCCESS)
     {
         Status = FspNtStatusFromWin32(Error);
-        goto out_close_event;
+        goto out_unreg_di_notify;
     }
 
     Error = VirtFs->FindDeviceInterface();
     if (Error != ERROR_SUCCESS)
     {
         // Wait for device to be found by arrival notification callback.
-        Error = WaitForSingleObject(VirtFs->EvtDeviceFound, INFINITE);
-        if (Error == WAIT_OBJECT_0)
-        {
-            return STATUS_SUCCESS;
-        }
-        else
-        {
-            Status = STATUS_UNSUCCESSFUL;
-            goto out_unreg_di_notify;
-        }
+        return STATUS_SUCCESS;
     }
 
     Error = VirtFs->DevHandleNotification.Register(DeviceNotificationCallback,
@@ -2727,8 +2722,6 @@ out_close_handle:
     CloseHandle(VirtFs->Device);
 out_unreg_di_notify:
     VirtFs->DevInterfaceNotification.Unregister();
-out_close_event:
-    CloseHandle(VirtFs->EvtDeviceFound);
 out_free_virtfs:
     delete VirtFs;
 
@@ -2742,7 +2735,6 @@ static NTSTATUS SvcStop(FSP_SERVICE *Service)
     VirtFs->Stop();
     VirtFs->DevHandleNotification.Unregister();
     VirtFs->CloseDeviceInterface();
-    CloseHandle(VirtFs->EvtDeviceFound);
     VirtFs->DevInterfaceNotification.Unregister();
     delete VirtFs;
 
