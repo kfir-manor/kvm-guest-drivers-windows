@@ -34,7 +34,7 @@ PnpLockdown = 1
 ;HKR,,Icon,,-5
 
 [DestinationDirs]
-DefaultDestDir = 12
+DefaultDestDir = 13
 VirtioInput_Device_CoInstaller_CopyFiles = 11
 
 [SourceDisksFiles]
@@ -93,14 +93,14 @@ AddService = viohidkmdf, 0x00000002, viohidkmdf_Service_Inst
 ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
 StartType      = 3               ; SERVICE_DEMAND_START
 ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
-ServiceBinary  = %12%\viohidkmdf.sys
+ServiceBinary  = %13%\viohidkmdf.sys
 
 [VirtioInput_Service_Inst]
 DisplayName    = %VirtioInput.ServiceDesc%
 ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
 StartType      = 3               ; SERVICE_DEMAND_START
 ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
-ServiceBinary  = %12%\vioinput.sys
+ServiceBinary  = %13%\vioinput.sys
 
 ;--- VirtioInput_Device Coinstaller installation ------
 ;
