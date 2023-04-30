@@ -25,7 +25,7 @@ DriverPackageDisplayName = %FwCfg.DeviceDesc%
 PnpLockdown = 1
 
 [DestinationDirs]
-DefaultDestDir = 12
+DefaultDestDir = 13
 FwCfg_Device_CoInstaller_CopyFiles = 11
 
 ; ================= Class section =====================
@@ -63,7 +63,7 @@ DisplayName    = %FwCfg.SVCDESC%
 ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
 StartType      = 3               ; SERVICE_DEMAND_START
 ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
-ServiceBinary  = %12%\fwcfg.sys
+ServiceBinary  = %13%\fwcfg.sys
 
 ;
 ;--- FwCfg_Device Coinstaller installation ------
