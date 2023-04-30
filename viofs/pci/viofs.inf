@@ -23,7 +23,7 @@ PnpLockdown     = 1
 DriverVer       = 01/01/2008,0.0.0.1 ; this line will be replaced with stampinf
 
 [DestinationDirs]
-DefaultDestDir = 12
+DefaultDestDir = 13
 VirtioFs_Wdf_CoInstaller_CopyFiles = 11
 
 [SourceDisksNames]
@@ -70,7 +70,7 @@ DisplayName    = %VirtioFs.Service%
 ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
 StartType      = 3               ; SERVICE_DEMAND_START
 ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
-ServiceBinary  = %12%\viofs.sys
+ServiceBinary  = %13%\viofs.sys
 LoadOrderGroup = Extended Base
 
 ; -------------------------------------
